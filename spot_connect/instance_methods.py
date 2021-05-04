@@ -15,7 +15,7 @@ MIT License 2020
 import sys, boto3, os
 from spot_connect import ec2_methods, sutils, interactive
 
-def run_script(instance, user_name, script, cmd=False, port=22, kp_dir=None, return_output=False):
+def run_script(instance, user_name, script, cmd=False, port=22, kp_dir=None, return_output=False, combine_error_stream=True):
     '''
     Run a script on the the given instance 
     __________
@@ -34,28 +34,50 @@ def run_script(instance, user_name, script, cmd=False, port=22, kp_dir=None, ret
         commands = script
     else:   
         commands = open(script, 'r').read().replace('\r', '')
-        
+
     client = ec2_methods.connect_to_instance(instance['PublicIpAddress'],kp_dir+'/'+instance['KeyName'],username=user_name,port=port)
     
     session = client.get_transport().open_session()
-    session.set_combine_stderr(True)                                           # Combine the error message and output message channels
-
+    if combine_error_stream: session.set_combine_stderr(True)                  # Combine the error message and output message channels
     session.exec_command(commands)                                             # Execute a command or .sh script (unix or linux console)
+    
+    if return_output:
+        output = ''
+        error_output = ''
+    
+    exit_status = session.recv_exit_status()
+    print(f"******** Exit Code - {exit_status} ************")
+    if exit_status <=0:
+        run_stat = True
+    else:
+        run_stat = False
+
     stdout = session.makefile()                                                # Collect the output 
     
-    try:
-        if return_output: output = ''
 
+    try:
         for line in stdout:
             if return_output: output+=line.rstrip()+'\n'
-            else: print(line.rstrip(), flush=True)                                   # Show the output 
-
+            else: print(line.rstrip(), flush=True)                             # Show the output 
+    
     except (KeyboardInterrupt, SystemExit):
         print(sys.stderr, 'Ctrl-C, stopping', flush=True)                      # Keyboard interrupt 
+    
+    if not combine_error_stream:
+        stderr = session.makefile_stderr()                                     # Collect the error output 
+        try:
+            for line in stderr:
+                if return_output: error_output+=line.rstrip()+'\n'
+                else: print(line.rstrip(), flush=True)                         # Show the error output
+
+        except (KeyboardInterrupt, SystemExit):
+            print(sys.stderr, 'Ctrl-C, stopping', flush=True)                  # Keyboard interrupt 
     client.close()                                                             # Close the connection    
 
-    if return_output: return True, output     
-    else: return True
+    if return_output: 
+        if combine_error_stream: return run_stat, output
+        return run_stat, output, error_output, exit_status
+    else: return run_stat
 
 
 def active_shell(instance, user_name, port=22, kp_dir=None): 

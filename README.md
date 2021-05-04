@@ -142,7 +142,7 @@ The `SpotInstance` class can be run from scripts and notebooks and has all the s
 The `my_instance` variable instantiated above would connect to or create an instance called "VM1" with profile "t3.small," cloudwatch monitoring enables and instance profile "role1."
 
 The `SpotInstance` class even lets you define some of the profile settings directly such as,*image_id*, *instance_type*, 
-*price*, *region*, and *firewall* (firewall settings). It even lets you specify some more detailed options such as the *key_pair*, *kp_dir* (key-pair directory), and *sec_group* (security group). 
+*price*, *region*, and *firewall* (firewall settings). It even lets you specify some more detailed options such as the *key_pair*, *kp_dir* (key-pair directory), and *security_group* (security group). 
 
 __*The only option that is available in the command line and NOT available through the `spotted` module is `activeprompt`.*__ 
 

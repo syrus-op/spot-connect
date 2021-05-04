@@ -234,7 +234,7 @@ def check_instance_initialization(instance_id, client=None, region=None, instanc
         try: 
             sys.stdout.write(".")
             sys.stdout.flush() 
-            instance_status = client.describe_instance_status(InstanceIds=[instance_id])['InstanceStatuses'][0]['InstanceStatus']['Status']
+            instance_status = client.describe_instance_status(InstanceIds=[instance_id], IncludeAllInstances=True)['InstanceStatuses'][0]['InstanceStatus']['Status']
             if instance_status!='initializing':
                 instance_up=True        
             else:

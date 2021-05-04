@@ -40,7 +40,6 @@ class SpotInstance:
     
     filesystem     =   None
     new_mount       =   None 
-    upload          =   None 
     remote_path     =   None 
     monitoring      =   None 
     
@@ -52,7 +51,9 @@ class SpotInstance:
     instance_type   =   None 
     filesystem_dns  =   None 
     filled_profile  =   None 
-   
+    SCRIPT_ERROR_MSG = "Error executing command script"
+
+
     def __init__(self,
                  name           :   str,
                  instance_id    :   bool  = False,
@@ -88,7 +89,7 @@ class SpotInstance:
         - username : string. This will usually depend on the operating system of the image used. For a list of operating systems and defaul usernames check https://alestic.com/2014/01/ec2-ssh-username/
         - key_pair : string. name of the keypair to use. Will search for `key_pair`.pem in the current directory 
         - kp_dir : string. path name for where to store the key pair files 
-        - sec_group : string. name of the security group to use
+        - security_group : string. name of the security group to use
         - efs_mount : bool. (for advanced use) If True, attach EFS mount. If no EFS mount with the name <filesystem> exists one is created. If filesystem is None the new EFS will have the same name as the instance  
         - new_mount : bool. (for advanced use) If True, create a new mount target on the EFS, even if one exists. If False, will be set to True if file system is submitted but no mount target is detected.
         - firewall : str. Firewall settings
@@ -145,7 +146,7 @@ class SpotInstance:
         
         if security_group is not None: 
             sg = iam_methods.retrieve_security_group(security_group, region=self.profile['region'])    
-            self.profile['security_group'] = (sg['GroupId'], self.sec_group)          
+            self.profile['security_group'] = (sg['GroupId'],self.security_group)          
             
         self.kp_dir = None 
         
@@ -290,7 +291,7 @@ class SpotInstance:
         print('Time to Download: %s' % str(time.time()-st))
 
 
-    def run(self, scripts, cmd=False, return_output=False, time_it=False):
+    def run(self, scripts, cmd=False, return_output=False, time_it=False, return_error=False):
         '''
         Run a script or list of scripts
         __________
@@ -304,17 +305,30 @@ class SpotInstance:
             scripts=[scripts]
         elif type(scripts)!=list:
             raise TypeError('scripts must be string or list of strings')
-        output = ''
+        output = None
         for script in scripts:
+            script_params = {
+                "instance": self.instance,
+                 "user_name": self.profile['username'],
+                 "script": script,
+                 "cmd": cmd,
+                 "kp_dir": self.kp_dir,
+                 "return_output": return_output,
+            }
             if not cmd:
                 print('\nExecuting script "%s"...' % str(script))
             try:
-                if return_output: run_stat, output = instance_methods.run_script(self.instance, self.profile['username'], script, cmd=cmd, kp_dir=self.kp_dir, return_output=return_output)
-                else: run_stat = instance_methods.run_script(self.instance, self.profile['username'], script, cmd=cmd, kp_dir=self.kp_dir, return_output=return_output)
+                if return_output:
+                    if return_error:
+                        run_stat, output, error_output, exit_code = instance_methods.run_script(**script_params, combine_error_stream=False)
+                    else:
+                        run_stat, output = instance_methods.run_script(**script_params, combine_error_stream=True)
+                else: run_stat = instance_methods.run_script(**script_params)
 
                 if not run_stat:
                     break
             except Exception as e: 
+                run_stat, output, error_output, exit_code = (False ,'', self.SCRIPT_ERROR_MSG, -1)
                 print(str(e))
                 print('Script %s failed with above error' % script)
     
@@ -322,6 +336,7 @@ class SpotInstance:
             print('Time to Run Scripts: %s' % str(time.time()-st))
 
         if return_output: 
+            if return_error: return output, run_stat, error_output, exit_code
             return output
 
 
@@ -352,7 +367,7 @@ class SpotInstance:
 		'''
         proceed = self.dir_exists(path_on_instance)
         if proceed:
-            command = update_git_repo(path_on_instance, branch=branch, repo_link=repo_link, command='')
+            command = update_git_repo(path_on_instance, branch=branch, repo_link=repo_link)
             self.run(command, cmd=True)
         else:
             raise Exception(str(path_on_instance)+' path was not found on instance')
